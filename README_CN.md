@@ -39,7 +39,7 @@ macOS 的 Finder 一直缺少"新建文件"的右键菜单选项——这在 Win
 
 ```bash
 # 克隆仓库
-git clone https://github.com/user/mac-right.git
+git clone https://github.com/AgentBuff/mac-right.git
 cd mac-right
 
 # 生成空白 Office 模板文件
