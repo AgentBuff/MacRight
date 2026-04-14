@@ -4,9 +4,50 @@ import UniformTypeIdentifiers
 
 class FinderSync: FIFinderSync {
 
+    private var refreshTimer: Timer?
+
     override init() {
         super.init()
-        FIFinderSyncController.default().directoryURLs = [URL(fileURLWithPath: "/")]
+        updateMonitoredDirectories()
+
+        // 监听卷挂载/卸载事件，动态更新监控目录
+        let nc = NSWorkspace.shared.notificationCenter
+        nc.addObserver(self, selector: #selector(volumesChanged(_:)),
+                       name: NSWorkspace.didMountNotification, object: nil)
+        nc.addObserver(self, selector: #selector(volumesChanged(_:)),
+                       name: NSWorkspace.didUnmountNotification, object: nil)
+
+        // 定时刷新作为 fallback（Finder Sync 扩展中 NSWorkspace 通知可能不可靠）
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.updateMonitoredDirectories()
+        }
+    }
+
+    // MARK: - Volume Monitoring
+
+    @objc private func volumesChanged(_ notification: Notification) {
+        NSLog("MacRight: 检测到卷变化，更新监控目录")
+        updateMonitoredDirectories()
+    }
+
+    private func updateMonitoredDirectories() {
+        var urls: Set<URL> = [
+            URL(fileURLWithPath: "/"),
+            URL(fileURLWithPath: "/Volumes")
+        ]
+
+        // 显式添加所有已挂载的卷
+        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsRemovableKey, .volumeIsLocalKey]
+        if let mountedVolumes = FileManager.default.mountedVolumeURLs(
+            includingResourceValuesForKeys: keys,
+            options: []) {
+            for volume in mountedVolumes {
+                urls.insert(volume)
+            }
+        }
+
+        NSLog("MacRight: 监控目录 = \(urls.map { $0.path })")
+        FIFinderSyncController.default().directoryURLs = urls
     }
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu {

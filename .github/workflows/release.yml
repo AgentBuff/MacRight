@@ -1,0 +1,81 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build MacRight
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Office templates
+        run: python3 Scripts/create_templates.py
+
+      - name: Build universal binary
+        env:
+          CI: "true"
+        run: |
+          chmod +x build.sh
+          ./build.sh "${{ github.ref_name }}"
+
+      - name: Verify universal binary
+        run: |
+          file build/MacRight.app/Contents/MacOS/MacRight
+          file build/MacRight.app/Contents/PlugIns/FinderSyncExtension.appex/Contents/MacOS/FinderSyncExtension
+
+      - name: Package as zip
+        run: |
+          cd build
+          ditto -c -k --keepParent MacRight.app MacRight-${{ github.ref_name }}.zip
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ github.ref_name }}"
+          # 获取上一个 tag
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${VERSION}$" | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD" -- . ':!.github')
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" -- . ':!.github')
+          fi
+          # 写入 release notes 文件
+          cat > release_notes.md << EOF
+          ## MacRight ${VERSION}
+
+          macOS Finder 右键菜单增强工具
+
+          ### 系统要求
+          - macOS 13.0 (Ventura) 或更高版本
+          - 支持 Apple Silicon (M1/M2/M3/M4) 和 Intel
+
+          ### 安装方法
+          1. 下载 \`MacRight-${VERSION}.zip\`
+          2. 解压后将 \`MacRight.app\` 拖入 \`/Applications\`
+          3. 打开 MacRight，按提示启用 Finder 扩展
+
+          ### 功能
+          - 右键新建 txt / docx / xlsx / pptx 文件
+          - 右键在当前目录打开终端 (Terminal / iTerm2)
+          - 支持内置硬盘、外接硬盘、U盘
+
+          ### 更新内容
+          ${CHANGELOG}
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MacRight ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: build/MacRight-${{ github.ref_name }}.zip

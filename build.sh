@@ -14,39 +14,55 @@ echo "==> Creating bundle structure..."
 mkdir -p "$APP_DIR/MacOS" "$APP_DIR/Resources"
 mkdir -p "$EXT_DIR/MacOS" "$EXT_DIR/Resources/Templates"
 
-echo "==> Compiling host app..."
-swiftc \
-  -sdk "$SDK_PATH" \
-  -target arm64-apple-macosx13.0 \
-  -F "$SDK_PATH/System/Library/Frameworks" \
-  -framework Cocoa -framework FinderSync -framework SwiftUI \
-  -module-name MacRight \
-  -emit-executable \
-  -o "$APP_DIR/MacOS/MacRight" \
-  -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
-  "$PROJECT_DIR/Shared/Constants.swift" \
-  "$PROJECT_DIR/Shared/Preferences.swift" \
-  "$PROJECT_DIR/MacRight/MacRightApp.swift" \
-  "$PROJECT_DIR/MacRight/Views/ContentView.swift" \
+HOST_SOURCES=(
+  "$PROJECT_DIR/Shared/Constants.swift"
+  "$PROJECT_DIR/Shared/Preferences.swift"
+  "$PROJECT_DIR/MacRight/MacRightApp.swift"
+  "$PROJECT_DIR/MacRight/Views/ContentView.swift"
   "$PROJECT_DIR/MacRight/Views/SettingsView.swift"
+)
 
-echo "==> Compiling Finder Sync Extension..."
-swiftc \
-  -sdk "$SDK_PATH" \
-  -target arm64-apple-macosx13.0 \
-  -F "$SDK_PATH/System/Library/Frameworks" \
-  -framework FinderSync -framework Cocoa -framework UniformTypeIdentifiers \
-  -module-name FinderSyncExtension \
-  -emit-executable \
-  -o "$EXT_DIR/MacOS/FinderSyncExtension" \
-  -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
-  -Xlinker -rpath -Xlinker @executable_path/../../../../Frameworks \
-  -Xlinker -e -Xlinker _NSExtensionMain \
-  "$PROJECT_DIR/Shared/Constants.swift" \
-  "$PROJECT_DIR/Shared/Preferences.swift" \
-  "$PROJECT_DIR/FinderSyncExtension/FinderSync.swift" \
-  "$PROJECT_DIR/FinderSyncExtension/Actions/FileCreator.swift" \
+EXT_SOURCES=(
+  "$PROJECT_DIR/Shared/Constants.swift"
+  "$PROJECT_DIR/Shared/Preferences.swift"
+  "$PROJECT_DIR/FinderSyncExtension/FinderSync.swift"
+  "$PROJECT_DIR/FinderSyncExtension/Actions/FileCreator.swift"
   "$PROJECT_DIR/FinderSyncExtension/Actions/TerminalLauncher.swift"
+)
+
+echo "==> Compiling host app (universal binary)..."
+for ARCH in arm64 x86_64; do
+  swiftc \
+    -sdk "$SDK_PATH" \
+    -target ${ARCH}-apple-macosx13.0 \
+    -F "$SDK_PATH/System/Library/Frameworks" \
+    -framework Cocoa -framework FinderSync -framework SwiftUI \
+    -module-name MacRight \
+    -emit-executable \
+    -o "$BUILD_DIR/MacRight_${ARCH}" \
+    -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
+    "${HOST_SOURCES[@]}"
+done
+lipo -create "$BUILD_DIR/MacRight_arm64" "$BUILD_DIR/MacRight_x86_64" -output "$APP_DIR/MacOS/MacRight"
+rm "$BUILD_DIR/MacRight_arm64" "$BUILD_DIR/MacRight_x86_64"
+
+echo "==> Compiling Finder Sync Extension (universal binary)..."
+for ARCH in arm64 x86_64; do
+  swiftc \
+    -sdk "$SDK_PATH" \
+    -target ${ARCH}-apple-macosx13.0 \
+    -F "$SDK_PATH/System/Library/Frameworks" \
+    -framework FinderSync -framework Cocoa -framework UniformTypeIdentifiers \
+    -module-name FinderSyncExtension \
+    -emit-executable \
+    -o "$BUILD_DIR/FinderSyncExtension_${ARCH}" \
+    -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
+    -Xlinker -rpath -Xlinker @executable_path/../../../../Frameworks \
+    -Xlinker -e -Xlinker _NSExtensionMain \
+    "${EXT_SOURCES[@]}"
+done
+lipo -create "$BUILD_DIR/FinderSyncExtension_arm64" "$BUILD_DIR/FinderSyncExtension_x86_64" -output "$EXT_DIR/MacOS/FinderSyncExtension"
+rm "$BUILD_DIR/FinderSyncExtension_arm64" "$BUILD_DIR/FinderSyncExtension_x86_64"
 
 echo "==> Copying resources..."
 cp "$PROJECT_DIR/FinderSyncExtension/Resources/Templates/blank."* "$EXT_DIR/Resources/Templates/"
@@ -103,9 +119,25 @@ PLIST
 
 echo -n "APPL????" > "$APP_DIR/PkgInfo"
 
+# 如果传入了版本号参数，写入 Info.plist
+VERSION="${1:-}"
+if [ -n "$VERSION" ]; then
+  # 去掉 v 前缀
+  VER="${VERSION#v}"
+  echo "==> Setting version to $VER..."
+  sed -i '' "s|<string>1.0.0</string>|<string>$VER</string>|g" "$APP_DIR/Info.plist"
+  sed -i '' "s|<string>1.0.0</string>|<string>$VER</string>|g" "$EXT_DIR/Info.plist"
+fi
+
 echo "==> Signing..."
 codesign --force --sign - --entitlements "$PROJECT_DIR/FinderSyncExtension/FinderSyncExtension.entitlements" "$BUILD_DIR/MacRight.app/Contents/PlugIns/FinderSyncExtension.appex"
 codesign --force --sign - --entitlements "$PROJECT_DIR/MacRight/MacRight.entitlements" "$BUILD_DIR/MacRight.app"
+
+# CI 模式：仅构建签名，不安装到本地
+if [ "${CI:-}" = "true" ]; then
+  echo "==> Done! (CI mode, skip local install)"
+  exit 0
+fi
 
 echo "==> Installing to /Applications..."
 killall MacRight 2>/dev/null || true
