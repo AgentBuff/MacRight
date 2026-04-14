@@ -39,7 +39,7 @@ Download the latest `.dmg` from [Releases](../../releases), open it, and drag **
 
 ```bash
 # Clone the repository
-git clone https://github.com/user/mac-right.git
+git clone https://github.com/AgentBuff/mac-right.git
 cd mac-right
 
 # Generate blank Office templates
