@@ -28,6 +28,7 @@ EXT_SOURCES=(
   "$PROJECT_DIR/FinderSyncExtension/FinderSync.swift"
   "$PROJECT_DIR/FinderSyncExtension/Actions/FileCreator.swift"
   "$PROJECT_DIR/FinderSyncExtension/Actions/TerminalLauncher.swift"
+  "$PROJECT_DIR/FinderSyncExtension/Actions/CmuxLauncher.swift"
 )
 
 echo "==> Compiling host app (universal binary)..."

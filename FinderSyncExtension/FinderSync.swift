@@ -65,6 +65,9 @@ class FinderSync: FIFinderSync {
             menu.addItem(NSMenuItem(title: "新建 PowerPoint 演示", action: #selector(createPptx(_:)), keyEquivalent: ""))
         }
         menu.addItem(NSMenuItem(title: "在此打开终端", action: #selector(openTerminal(_:)), keyEquivalent: ""))
+        if CmuxLauncher.isInstalled {
+            menu.addItem(NSMenuItem(title: "在此处打开 cmux", action: #selector(openCmux(_:)), keyEquivalent: ""))
+        }
 
         return menu
     }
@@ -119,5 +122,11 @@ class FinderSync: FIFinderSync {
         NSLog("MacRight: openTerminal called!")
         guard let dir = targetDirectory else { NSLog("MacRight: no target dir"); return }
         TerminalLauncher.open(at: dir, using: Preferences.shared.preferredTerminal)
+    }
+
+    @objc func openCmux(_ sender: AnyObject?) {
+        NSLog("MacRight: openCmux called!")
+        guard let dir = targetDirectory else { NSLog("MacRight: no target dir"); return }
+        CmuxLauncher.open(at: dir)
     }
 }
