@@ -68,6 +68,7 @@ class FinderSync: FIFinderSync {
         if CmuxLauncher.isInstalled {
             menu.addItem(NSMenuItem(title: "在此处打开 cmux", action: #selector(openCmux(_:)), keyEquivalent: ""))
         }
+        menu.addItem(NSMenuItem(title: "拷贝路径", action: #selector(copyPaths(_:)), keyEquivalent: ""))
 
         return menu
     }
@@ -128,5 +129,33 @@ class FinderSync: FIFinderSync {
         NSLog("MacRight: openCmux called!")
         guard let dir = targetDirectory else { NSLog("MacRight: no target dir"); return }
         CmuxLauncher.open(at: dir)
+    }
+
+    @objc func copyPaths(_ sender: AnyObject?) {
+        NSLog("MacRight: copyPaths called!")
+        
+        // 获取选中的项目
+        guard let selectedItems = FIFinderSyncController.default().selectedItemURLs(),
+              !selectedItems.isEmpty else {
+            NSLog("MacRight: No items selected")
+            return
+        }
+        
+        NSLog("MacRight: Selected items count = \(selectedItems.count)")
+        
+        // 提取所有选中项目的路径
+        let paths = selectedItems.map { $0.path }
+        
+        // 用逗号分隔多个路径
+        let pathsString = paths.joined(separator: ", ")
+        
+        NSLog("MacRight: Copying paths: \(pathsString)")
+        
+        // 复制到剪贴板
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(pathsString, forType: .string)
+        
+        NSLog("MacRight: Paths copied to clipboard successfully")
     }
 }
